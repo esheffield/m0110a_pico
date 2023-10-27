@@ -22,7 +22,7 @@ const uint SHF_PIN = 21;
 
 // Rows: GPI8 - GP17 -> output
 const uint ROW_INIT_MASK = 0x0003FF00;
-const uint ROW_DIR_MASK = 0x0003FF00;
+const uint ROW_DIR_MASK = 0x00000000; // 0x0003FF00;
 
 // Cols: GP0 - GP7 -> input
 const uint COL_INIT_MASK = 0x000000FF;
@@ -62,7 +62,12 @@ int main()
     while (1)
     {
         char *key_row = (char *)(KEYMAP + (COLS * row));
-        gpio_put_masked(ROW_INIT_MASK, 1 << (8 + row));
+        uint row_activate = 1 << (8 + row);
+
+        // Set only the active row to output, others input so will effectively float
+        gpio_set_dir_masked(ROW_INIT_MASK, row_activate);
+        sleep_ms(5);
+        gpio_put_masked(ROW_INIT_MASK, row_activate);
         // slight delay for lines to settle
         sleep_ms(5);
 
