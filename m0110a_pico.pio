@@ -1,0 +1,94 @@
+/*
+PIO - run SM at 10us clock (100KHz)
+Pico @ 133MHz
+SM divisor = 1330
+
+Use separate SMs for input from and output to computer
+
+Ensure send / receive high-order bit (7) first
+Configure
+  - I/O pin as OUT pin
+  - CLK pin as SET pin
+*/
+
+/*
+SM 2: Output
+- initialize
+  - configure IO for output
+  - set clock high
+- set x, 7
+- pull					; output FIFO to OSR
+loop1:
+  - out pins, 1 [3]		; write bit to IO (1 + 3 wait = 40us)
+  - set pins, 0 [15]	; set clock low (1 + 15 wait = 160us)
+  - set pins, 1 [16]	; set clock high (1 + 11 wait = 120us)
+  - jmp x--, loop1		; (1 = 10us)
+- irq 1					; fire IRQ 1 to system
+-- or --
+loop2:
+  - jmp loop2	
+*/
+
+.program transmit
+    out PINDIRS, 1      ; transmitting, set I/O line to output
+    set x, 7            ; use scratch x for loop count to output 8 bits
+    pull                ; move byte from output FIFO to OSR
+loop1:
+    out pins, 1 [3]     ; write bit to I/O (1 + 3 cycles = 40 us)
+    set pins, 0 [15]    ; set clock low (1 + 15 cycles = 160 us)
+    set pins, 1 [16]    ; set clock high (1 + 11 cycles = 120 us)
+    jmp x--, loop1      ; (1 = 10 us)
+
+loop2:
+    jmp loop2           ; loop forever, main program will start / stop PIO apps as needed
+
+/*
+SM 1: Input
+- initialize
+  - configure IO for input
+  - set clock high
+- wait for low on IO line
+- set x, 7
+loop:
+  - set pins, 0 [17]	; set clock low (1 + 17 wait = 180us)
+  - set pins, 1 [7]		; set clock high (1 + 7 wait = 80us)
+  - in pins, 1 [12]		; read bit from IO (1 + 12 wait = 130us)
+  - jmp x--, loop		; (1 = 10us)
+- push					; ISR to input FIFO
+loop2:
+  - jmp loop2			; loop forever (main thread will stop / restart as necessary)
+*/
+.program receive
+    set pins, 1         ; set clock to high
+    wait 0 pin 0        ; wait for low on I/O pin
+    set x, 7            ; use scratch x for loop count to input 8 bits
+loop:
+  set pins, 0 [17]	    ; set clock low (1 + 17 wait = 180us)
+  set pins, 1 [7]		; set clock high (1 + 7 wait = 80us)
+  in pins, 1 [12]		; read bit from IO (1 + 12 wait = 130us)
+  jmp x--, loop		    ; (1 = 10us)
+push					; ISR to input FIFO
+loop2:
+  jmp loop2			    ; loop forever (main thread will stop / restart as necessary)
+
+% c-sdk {
+// this is a raw helper function for use by the user which sets up the GPIO output, and configures the SM to output on a particular pin
+
+void transmit_program_init(PIO pio, uint sm, uint offset, uint data_pin, uint clk_pin) {
+   pio_gpio_init(pio, pin);
+   pio_sm_set_consecutive_pindirs(pio, sm, clk_pin, 1, true);
+   pio_sm_config c = blink_program_get_default_config(offset);
+   sm_config_set_out_pins(&c, data_pin, 1)
+   sm_config_set_in_pins(&c, data_pin)
+   sm_config_set_set_pins(&c, clk_pin, 1);
+   pio_sm_init(pio, sm, offset, &c);
+}
+
+void receive_program_init(PIO pio, uint sm, uint offset, uint pin) {
+   pio_gpio_init(pio, pin);
+   pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+   pio_sm_config c = blink_program_get_default_config(offset);
+   sm_config_set_set_pins(&c, pin, 1);
+   pio_sm_init(pio, sm, offset, &c);
+}
+%}

@@ -83,6 +83,17 @@
 #define KEY_TXN_UP 0x80
 #define KEY_NULL 0x00
 
+const uint const KEYPAD_MAP_BY_COL[8] = {
+    0,
+    0,
+    0,
+    0,
+    0x038000,
+    0x03FE00,
+    0x003A00,
+    0x03F000,
+};
+
 const char const KEYMAP[10][8] = {
     {
         KEY_X,

@@ -16,4 +16,6 @@ pico_enable_stdio_uart(m0110a_pico 0)
 
 pico_add_extra_outputs(m0110a_pico)
 
+pico_generate_pio_header(m0110a_pico ${CMAKE_CURRENT_LIST_DIR}/m0110a_pico.pio)
+
 target_link_libraries(m0110a_pico pico_stdlib)
