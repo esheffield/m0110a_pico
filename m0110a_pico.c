@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
+#include "hardware/pio.h"
+#include "hardware/clocks.h"
 #include "pico/binary_info.h"
 #include "m0110a_pico.h"
+#include "m0110a_pico.pio.h"
 
 const uint LED_PIN = 25;
 
@@ -11,7 +14,7 @@ const uint COLS = 8;
 const uint MODS = 4;
 
 const uint CLK_PIN = 26;
-const uint DATA_PIN = 28;
+const uint DATA_PIN = 27;
 
 const uint ROW_PINS[] = {8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
 const uint COL_PINS[] = {0, 1, 2, 3, 4, 5, 6, 7};
@@ -53,6 +56,34 @@ bool is_keypad_shift(uint row, char col);
 void print_key_code(char key_code);
 char check_modifier(uint masked_value, char mod_key_code, char *state);
 
+int main() {
+    bi_decl(bi_program_description("M0110A controller replacement"));
+
+    stdio_init_all();
+
+    PIO pio = pio0;
+    uint receive_offset = pio_add_program(pio, &receive_program);
+    uint rx_sm = pio_claim_unused_sm(pio, true);
+
+    uint transmit_offset = pio_add_program(pio, &transmit_program);
+    // uint tx_sm = pio_claim_unused_sm(pio, true);
+
+    receive_program_init(pio, rx_sm, receive_offset, DATA_PIN, CLK_PIN);
+    // transmit_program_init(pio, rx_sm, transmit_offset, DATA_PIN, CLK_PIN);
+
+    pio_sm_set_enabled(pio, rx_sm, true);
+    sleep_ms(2000);
+    printf("Reading back from RX FIFO:\n");
+    fflush(stdout);
+    sleep_ms(2000);
+    while(1){
+        printf("Polling... \n");
+        uint32_t rxdata = pio_sm_get_blocking(pio, rx_sm);
+        printf("Received: %08x\n", rxdata);
+    }
+}
+
+/*
 int main()
 {
 
@@ -144,6 +175,7 @@ int main()
         row = (row + 1) % 10;
     }
 }
+*/
 
 // Check if the key is a keypad or arrow key needing a "keypad" prefix (0x79)
 bool is_keypad(uint active_row, char col)
