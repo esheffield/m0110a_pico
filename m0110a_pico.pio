@@ -30,13 +30,15 @@ loop2:
 */
 
 .program transmit
-  out PINDIRS, 1      ; transmitting, set I/O line to output
+  set PINDIRS, 3      ; transmitting, set data and clock line to output
   set x, 7            ; use scratch x for loop count to output 8 bits
-  pull                ; move byte from output FIFO to OSR
+  pull block          ; move byte from output FIFO to OSR
+  set pins, 1
+  out null, 24
 loop1:
   out pins, 1 [3]     ; write bit to I/O (1 + 3 cycles = 40 us)
-  set pins, 0 [15]    ; set clock low (1 + 15 cycles = 160 us)
-  set pins, 1 [16]    ; set clock high (1 + 11 cycles = 120 us)
+  set pins, 0 [14]    ; set clock low (1 + 15 cycles = 160 us)
+  set pins, 1 [10]    ; set clock high (1 + 11 cycles = 120 us)
   jmp x--, loop1      ; (1 = 10 us)
 
 loop2:
@@ -59,8 +61,8 @@ loop2:
   - jmp loop2			; loop forever (main thread will stop / restart as necessary)
 */
 .program receive
+  set PINDIRS, 1      ; receiving, set data to input and clock to output
   set pins, 1         ; set clock to high
-.wrap_target
   wait 1 pin 0
   wait 0 pin 0        ; wait for low on I/O pin
   set x, 7            ; use scratch x for loop count to input 8 bits
@@ -70,26 +72,27 @@ loop:
   in pins, 1 [12]		  ; read bit from IO (1 + 12 wait = 130us)
   jmp x--, loop		    ; (1 = 10us)
   push					      ; ISR to input FIFO
-.wrap
-; loop2:
-;   jmp loop2			      ; loop forever (main thread will stop / restart as necessary)
+loop2:
+  jmp loop2			      ; loop forever (main thread will stop / restart as necessary)
 
 % c-sdk {
 // this is a raw helper function for use by the user which sets up the GPIO output, and configures the SM to output on a particular pin
 
-void transmit_program_init(PIO pio, uint sm, uint offset, uint data_pin, uint clk_pin) {
+void transmit_program_init(PIO pio, uint sm, uint offset, uint clk_pin, uint data_pin) {
+  assert(data_pin == clk_pin + 1);
   pio_gpio_init(pio, data_pin);
   pio_gpio_init(pio, clk_pin);
-  pio_sm_set_consecutive_pindirs(pio, sm, data_pin, 1, true);
-  pio_sm_set_consecutive_pindirs(pio, sm, clk_pin, 1, true);
+  pio_sm_set_consecutive_pindirs(pio, sm, clk_pin, 2, true);
   pio_sm_config c = transmit_program_get_default_config(offset);
   sm_config_set_clkdiv(&c, 1330);
   sm_config_set_out_pins(&c, data_pin, 1);
   sm_config_set_set_pins(&c, clk_pin, 1);
+  sm_config_set_out_shift (&c, false, false, 0);
   pio_sm_init(pio, sm, offset, &c);
 }
 
-void receive_program_init(PIO pio, uint sm, uint offset, uint data_pin, uint clk_pin) {
+void receive_program_init(PIO pio, uint sm, uint offset, uint clk_pin, uint data_pin) {
+  assert(data_pin == clk_pin + 1);
   pio_gpio_init(pio, data_pin);
   pio_gpio_init(pio, clk_pin);
   pio_sm_set_consecutive_pindirs(pio, sm, data_pin, 1, false);
@@ -97,7 +100,7 @@ void receive_program_init(PIO pio, uint sm, uint offset, uint data_pin, uint clk
   pio_sm_config c = receive_program_get_default_config(offset);
   sm_config_set_clkdiv(&c, 1330);
   sm_config_set_in_pins(&c, data_pin);
-  sm_config_set_set_pins(&c, clk_pin, 1);
+  sm_config_set_set_pins(&c, clk_pin, 2);
   sm_config_set_in_shift (&c, false, false, 0);
   pio_sm_init(pio, sm, offset, &c);
 }

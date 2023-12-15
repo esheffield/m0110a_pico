@@ -66,20 +66,47 @@ int main() {
     uint rx_sm = pio_claim_unused_sm(pio, true);
 
     uint transmit_offset = pio_add_program(pio, &transmit_program);
-    // uint tx_sm = pio_claim_unused_sm(pio, true);
+    uint tx_sm = pio_claim_unused_sm(pio, true);
 
-    receive_program_init(pio, rx_sm, receive_offset, DATA_PIN, CLK_PIN);
-    // transmit_program_init(pio, rx_sm, transmit_offset, DATA_PIN, CLK_PIN);
-
-    pio_sm_set_enabled(pio, rx_sm, true);
-    sleep_ms(2000);
     printf("Reading back from RX FIFO:\n");
     fflush(stdout);
     sleep_ms(2000);
     while(1){
+        receive_program_init(pio, rx_sm, receive_offset, CLK_PIN, DATA_PIN);
+        pio_sm_set_enabled(pio, rx_sm, true);
+
         printf("Polling... \n");
         uint32_t rxdata = pio_sm_get_blocking(pio, rx_sm);
         printf("Received: %08x\n", rxdata);
+
+        pio_sm_set_enabled(pio, rx_sm, false);
+
+        transmit_program_init(pio, tx_sm, transmit_offset, CLK_PIN, DATA_PIN);
+        pio_sm_set_enabled(pio, tx_sm, true);
+
+        pio_sm_drain_tx_fifo(pio, tx_sm);
+
+        switch(rxdata) {
+            case CMD_INQUIRY:
+                printf("Inquiry received\n");
+                break;
+            case CMD_INSTANT:
+                printf("Instant received\n");
+                break;
+            case CMD_MODEL:
+                printf("Model received\n");
+                pio_sm_put_blocking(pio, tx_sm, MODEL_ID);
+                break;
+            case CMD_TEST:
+                printf("Test received\n");
+                break;
+            default:
+                printf("Unrecognized command\n");
+        }
+
+        sleep_ms(3);
+
+        pio_sm_set_enabled(pio, tx_sm, false);
     }
 }
 

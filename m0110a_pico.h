@@ -1,5 +1,12 @@
 #include "pico/stdlib.h"
 
+#define MODEL_ID 0x0B
+
+#define CMD_MODEL 0x16
+#define CMD_INQUIRY 0x10
+#define CMD_INSTANT 0x14
+#define CMD_TEST 0x36
+
 #define KEY_GRAVE 0x65
 #define KEY_1 0x25
 #define KEY_2 0x27
